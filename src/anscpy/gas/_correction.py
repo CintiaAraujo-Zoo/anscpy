@@ -13,7 +13,7 @@ import numpy as np
 from typing import Union, Callable
 
 try:
-    import pandas as pd
+    import pandas as pd  # noqa: F401
     _PANDAS_AVAILABLE = True
 except ImportError:
     _PANDAS_AVAILABLE = False
