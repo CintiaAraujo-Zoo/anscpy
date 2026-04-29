@@ -3,6 +3,9 @@ Tests for anscpy.gas._fitting
 
 Verifies that fit_gas_production() converges correctly
 using a reference dataset from Wang et al. (2011).
+
+All input data is in mL. PSI conversion is the user's responsibility
+and is not tested here.
 """
 
 import pytest
@@ -64,10 +67,10 @@ def test_invalid_model_raises():
 
 
 # ---------------------------------------------------------------------------
-# Blank correction integration
+# Blank correction — data in mL only
 # ---------------------------------------------------------------------------
 
-def test_fit_with_blank():
+def test_fit_with_single_blank():
     blank = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.5, 4.5, 5.0, 5.2]
     result = fit_gas_production(
         TIME, VOLUME,
@@ -76,6 +79,30 @@ def test_fit_with_blank():
     )
     assert result.blank_used is not None
     assert result.r_squared > 0.95
+
+def test_fit_with_multiple_blanks():
+    blank = [
+        [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.5, 4.5, 5.0, 5.2],
+        [0, 0.4, 0.9, 1.4, 1.9, 2.4, 3.3, 4.3, 4.8, 5.0],
+    ]
+    result = fit_gas_production(
+        TIME, VOLUME,
+        blank=blank,
+        blank_method='mean',
+        verbose=False
+    )
+    assert result.blank_used is not None
+    assert result.r_squared > 0.95
+
+def test_blank_result_stores_method():
+    blank = [0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.5, 4.5, 5.0, 5.2]
+    result = fit_gas_production(
+        TIME, VOLUME,
+        blank=blank,
+        blank_method='median',
+        verbose=False
+    )
+    assert result.blank_method == 'median'
 
 
 # ---------------------------------------------------------------------------
