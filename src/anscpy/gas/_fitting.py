@@ -3,6 +3,10 @@ anscpy.gas._fitting
 ====================
 Main fitting functions for in vitro gas production kinetics.
 
+All input data must be in mL. Unit conversion (e.g., PSI → mL) is the
+responsibility of the user and must be performed before calling any
+function in this module.
+
 Public functions
 ----------------
 fit_gas_production : Fit a model to a single sample.
@@ -16,7 +20,7 @@ from typing import Optional, Union, Callable
 from scipy.optimize import curve_fit
 
 from ._models import _get_model_config
-from ._correction import correct_blank, _to_ml, PSI_SLOPE, PSI_INTERCEPT
+from ._correction import correct_blank
 from ._results import GasProductionResult
 
 try:
@@ -28,21 +32,21 @@ except ImportError:
 
 def fit_gas_production(time,
                        volume,
-                       input_unit: str = 'ml',
                        model: str = 'LE0',
                        blank=None,
                        blank_method: Union[str, Callable] = 'mean',
-                       blank_unit: Optional[str] = None,
                        clip_negative: bool = True,
                        warn_negative: bool = True,
-                       slope_psi: float = PSI_SLOPE,
-                       intercept_psi: float = PSI_INTERCEPT,
                        p0=None,
                        treatment: str = '',
                        replicate: str = '',
                        verbose: bool = True):
     """
     Fit a mathematical model to in vitro gas production data.
+
+    All input data must be in mL. If your data is in PSI or another
+    pressure unit, convert it to mL before calling this function using
+    your laboratory's own calibration equation.
 
     Parameters
     ----------
@@ -51,16 +55,13 @@ def fit_gas_production(time,
         Example: [0, 2, 4, 6, 8, 12, 24, 48, 72, 96]
 
     volume : array-like
-        Sample readings in PSI or mL, according to input_unit.
-
-    input_unit : str, default 'ml'
-        Unit of sample data: 'ml' or 'psi'.
+        Sample gas volumes in mL.
 
     model : str, default 'LE0'
         Model to fit. Options: 'LE0', 'LEL', 'MM', 'MIT', 'EXPL', 'GOM', 'LOG'.
 
     blank : array-like or DataFrame, optional
-        Blank vial data for correction.
+        Blank vial volumes in mL.
         - None      : no correction applied.
         - 1D array  : single blank vial.
         - 2D array  : N blank vials × T timepoints.
@@ -70,21 +71,11 @@ def fit_gas_production(time,
         Aggregation method for multiple blank vials.
         Options: 'mean', 'median', 'min', 'max', or a custom callable.
 
-    blank_unit : str, optional
-        Unit of blank data. If None, inherits input_unit.
-
     clip_negative : bool, default True
         Replace negative corrected values with 0.
 
     warn_negative : bool, default True
         Emit a warning when negative corrected values are detected.
-
-    slope_psi : float, default 4.4392
-        Slope of the PSI → mL calibration regression.
-        Adjust to match your laboratory manometer calibration.
-
-    intercept_psi : float, default 0.8943
-        Intercept of the PSI → mL calibration regression.
 
     p0 : list, optional
         Manual initial parameter values. If None, automatic grid search
@@ -114,7 +105,7 @@ def fit_gas_production(time,
     >>> result.summary()
     >>> result.plot()
     """
-    t   = np.asarray(time, dtype=float)
+    t   = np.asarray(time,   dtype=float)
     raw = np.asarray(volume, dtype=float)
 
     if len(t) != len(raw):
@@ -123,13 +114,10 @@ def fit_gas_production(time,
             f"but got {len(t)} and {len(raw)}."
         )
 
-    v_raw = _to_ml(raw, input_unit, slope_psi, intercept_psi)
-
-    v_blank_agg = None
+    v_blank_agg       = None
     _blank_method_str = ""
 
     if blank is not None:
-        _blank_unit = blank_unit if blank_unit is not None else input_unit
         _blank_method_str = (
             blank_method.__name__
             if callable(blank_method) and not isinstance(blank_method, str)
@@ -139,15 +127,11 @@ def fit_gas_production(time,
             t, raw,
             blank=blank,
             method=blank_method,
-            blank_unit=_blank_unit,
-            sample_unit=input_unit,
-            slope_psi=slope_psi,
-            intercept_psi=intercept_psi,
             clip_negative=clip_negative,
-            warn_negative=warn_negative
+            warn_negative=warn_negative,
         )
     else:
-        v_corr = v_raw.copy()
+        v_corr = raw.copy()
 
     v_max = v_corr.max()
     if v_max <= 0:
@@ -215,14 +199,14 @@ def fit_gas_production(time,
         n_obs        = n,
         time         = t,
         observed     = v_corr,
-        observed_raw = v_raw,
+        observed_raw = raw.copy(),
         predicted    = pred,
         func         = func,
         blank_used   = v_blank_agg,
         blank_method = _blank_method_str,
         treatment    = treatment,
         replicate    = replicate,
-        converged    = True
+        converged    = True,
     )
 
     if verbose:
@@ -234,15 +218,15 @@ def fit_gas_production(time,
 def fit_treatment(time,
                   volume_matrix,
                   model: str = 'LE0',
-                  input_unit: str = 'ml',
                   blank=None,
                   blank_method: Union[str, Callable] = 'mean',
-                  blank_unit: Optional[str] = None,
                   treatment_name: str = '',
                   verbose: bool = False,
                   **kwargs):
     """
     Fit a model to multiple replicates of a single treatment.
+
+    All input data must be in mL.
 
     Parameters
     ----------
@@ -250,23 +234,17 @@ def fit_treatment(time,
         Time vector (h), shared across all replicates.
 
     volume_matrix : 2D array-like or DataFrame
-        Volume data. Each column is one replicate.
+        Volume data in mL. Each column is one replicate.
         Example: DataFrame with columns ['R1', 'R2', 'R3', 'R4'].
 
     model : str, default 'LE0'
         Model to fit.
 
-    input_unit : str, default 'ml'
-        Unit of sample data: 'ml' or 'psi'.
-
     blank : array-like or DataFrame, optional
-        Blank vial data applied to all replicates.
+        Blank vial volumes in mL, applied to all replicates.
 
     blank_method : str or callable, default 'mean'
         Aggregation method for multiple blank vials.
-
-    blank_unit : str, optional
-        Unit of blank data. If None, inherits input_unit.
 
     treatment_name : str, optional
         Treatment name for result identification.
@@ -289,7 +267,7 @@ def fit_treatment(time,
     if mat.ndim == 1:
         mat = mat.reshape(-1, 1)
 
-    t = np.asarray(time, dtype=float)
+    t       = np.asarray(time, dtype=float)
     results = []
 
     for i in range(mat.shape[1]):
@@ -298,10 +276,8 @@ def fit_treatment(time,
             res = fit_gas_production(
                 t, mat[:, i],
                 model=model,
-                input_unit=input_unit,
                 blank=blank,
                 blank_method=blank_method,
-                blank_unit=blank_unit,
                 treatment=treatment_name,
                 replicate=rep_label,
                 verbose=verbose,
