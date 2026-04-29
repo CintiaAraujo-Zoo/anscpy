@@ -26,6 +26,16 @@ Compatible with semi-automatic (pressure transducer) and automatic techniques.
 
 ### Minimal example (data in mL)
 
+Fits mathematical models to cumulative in vitro gas production profiles.
+Compatible with semi-automatic and automatic techniques.
+
+> **Note on units:** `anscpy.gas` works exclusively with volumes in **mL**.
+> If your equipment records data in PSI or other pressure units, convert to mL
+> before using any function. Each laboratory should derive its own calibration
+> equation experimentally.
+
+### Minimal example
+
 ```python
 from anscpy.gas import fit_gas_production
 
@@ -40,12 +50,11 @@ result.plot()
 ### With blank correction (PSI input, semi-automatic technique)
 
 ```python
+# Convert your data to mL first, then:
 result = fit_gas_production(
-    time       = time,
-    volume     = sample_psi,
-    input_unit = 'psi',
-    blank      = blanks_psi,
-    blank_unit = 'psi',
+    time   = time,
+    volume = volume_ml,
+    blank  = blank_ml,
 )
 result.summary()
 result.plot()
